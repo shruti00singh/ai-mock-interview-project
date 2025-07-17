@@ -2,7 +2,6 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@clerk/clerk-react";
 import { Container } from "./container";
 import { LogoContainer } from "./logo-container";
-import { NavigationRoutes } from "./navigation-routes";
 import { NavLink } from "react-router-dom";
 import { ProfileContainer } from "./profile-container";
 import { ToggleContainer } from "./toggle-container";
@@ -19,16 +18,31 @@ const Header = () => {
           {/* logo section */}
           <LogoContainer />
 
-          {/* navigation section */}
-                    <nav className="hidden md:flex items-center gap-3">
-            <NavigationRoutes />
+          {/* navigation buttons */}
+          <nav className="hidden md:flex items-center gap-3">
+            <NavLink
+              to="/"
+              className={({ isActive }) =>
+                cn(
+                  "px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200",
+                  isActive
+                    ? "bg-black text-white"
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                )
+              }
+            >
+              Home
+            </NavLink>
+
             {userId && (
               <NavLink
-                to={"/generate"}
+                to="/generate"
                 className={({ isActive }) =>
                   cn(
-                    "text-base text-neutral-600",
-                    isActive && "text-neutral-900 font-semibold"
+                    "px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200",
+                    isActive
+                      ? "bg-black text-white"
+                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                   )
                 }
               >
@@ -38,7 +52,6 @@ const Header = () => {
           </nav>
 
           <div className="ml-auto flex items-center gap-6">
-
             {/* profile section */}
             <ProfileContainer />
 
