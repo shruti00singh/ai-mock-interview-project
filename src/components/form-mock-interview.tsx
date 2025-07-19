@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormProvider, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import type { Interview } from "@/types";
 import { CustomBreadCrumb } from "./custom-bread-crumb";
 import { useEffect, useState } from "react";
@@ -12,6 +12,7 @@ import { Button } from "./ui/button";
 import { Loader, Trash2 } from "lucide-react";
 import { Separator } from "./ui/separator";
 import {
+  Form,
   FormControl,
   FormField,
   FormItem,
@@ -34,18 +35,20 @@ interface FormMockInterviewProps {
   initialData: Interview | null;
 }
 
+// Fixed schema without z.coerce to avoid type conflicts
 const formSchema = z.object({
   position: z
     .string()
     .min(1, "Position is required")
     .max(100, "Position must be 100 characters or less"),
   description: z.string().min(10, "Description is required"),
-  experience: z.coerce
+  experience: z
     .number()
     .min(0, "Experience cannot be empty or negative"),
   techStack: z.string().min(1, "Tech stack must be at least a character"),
 });
 
+// Explicitly define the form data type
 type FormData = z.infer<typeof formSchema>;
 
 const defaultFormValues: FormData = {
@@ -56,13 +59,19 @@ const defaultFormValues: FormData = {
 };
 
 export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
+  // Properly typed form with explicit generic
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData || defaultFormValues,
+    defaultValues: initialData ? {
+      position: initialData.position,
+      description: initialData.description,
+      experience: initialData.experience,
+      techStack: initialData.techStack,
+    } : defaultFormValues,
   });
 
   const { isValid, isSubmitting } = form.formState;
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
   const navigate = useNavigate();
   const { userId } = useAuth();
 
@@ -70,13 +79,13 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
     ? initialData.position
     : "Create a new mock interview";
 
-  const breadCrumpPage = initialData ? initialData?.position : "Create";
+  const breadCrumpPage = initialData ? initialData.position : "Create";
   const actions = initialData ? "Save Changes" : "Create";
   const toastMessage = initialData
     ? { title: "Updated..!", description: "Changes saved successfully..." }
     : { title: "Created..!", description: "New Mock Interview created..." };
 
-  const cleanAiResponse = (responseText: string) => {
+  const cleanAiResponse = (responseText: string): unknown[] => {
     let cleanText = responseText.trim();
     cleanText = cleanText.replace(/(json|```|`)/g, "");
     const jsonArrayMatch = cleanText.match(/\[.*\]/s);
@@ -86,13 +95,13 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
       throw new Error("No JSON array found in response");
     }
     try {
-      return JSON.parse(cleanText);
+      return JSON.parse(cleanText) as unknown[];
     } catch (error) {
       throw new Error("Invalid JSON format: " + (error as Error)?.message);
     }
   };
 
-  const generateAiResponse = async (data: FormData) => {
+  const generateAiResponse = async (data: FormData): Promise<unknown[]> => {
     const prompt = `
         As an experienced prompt engineer, generate a JSON array containing 5 technical interview questions along with detailed answers based on the following job information. Each object in the array should have the fields "question" and "answer", formatted as follows:
         [
@@ -100,24 +109,25 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
           ...
         ]
         Job Information:
-        - Job Position: ${data?.position}
-        - Job Description: ${data?.description}
-        - Years of Experience Required: ${data?.experience}
-        - Tech Stacks: ${data?.techStack}
-        The questions should assess skills in ${data?.techStack} development and best practices, problem-solving, and experience handling complex requirements. Please format the output strictly as an array of JSON objects without any additional labels, code blocks, or explanations. Return only the JSON array with questions and answers.
+        - Job Position: ${data.position}
+        - Job Description: ${data.description}
+        - Years of Experience Required: ${data.experience}
+        - Tech Stacks: ${data.techStack}
+        The questions should assess skills in ${data.techStack} development and best practices, problem-solving, and experience handling complex requirements. Please format the output strictly as an array of JSON objects without any additional labels, code blocks, or explanations. Return only the JSON array with questions and answers.
         `;
     const aiResult = await chatSession.sendMessage(prompt);
     const cleanedResponse = cleanAiResponse(aiResult.response.text());
     return cleanedResponse;
   };
 
-  const onSubmit = async (data: FormData) => {
+  // Properly typed submit handler
+  const onSubmit = async (data: FormData): Promise<void> => {
     try {
       setLoading(true);
       if (initialData) {
         if (isValid) {
           const aiResult = await generateAiResponse(data);
-          await updateDoc(doc(db, "interviews", initialData?.id), {
+          await updateDoc(doc(db, "interviews", initialData.id), {
             questions: aiResult,
             ...data,
             updatedAt: serverTimestamp(),
@@ -174,7 +184,7 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
       </div>
       <Separator className="my-4" />
       <div className="my-6"></div>
-      <FormProvider {...form}>
+      <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
           className="w-full p-8 rounded-lg flex-col flex items-start justify-start gap-6 shadow-md "
@@ -194,7 +204,6 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
                     disabled={loading}
                     placeholder="eg:- Full Stack Developer"
                     {...field}
-                    value={field.value || ""}
                   />
                 </FormControl>
               </FormItem>
@@ -213,9 +222,8 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
                   <Textarea
                     className="h-12"
                     disabled={loading}
-                    placeholder="eg:- describle your job role"
+                    placeholder="eg:- describe your job role"
                     {...field}
-                    value={field.value || ""}
                   />
                 </FormControl>
               </FormItem>
@@ -236,8 +244,13 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
                     className="h-12"
                     disabled={loading}
                     placeholder="eg:- 5 Years"
-                    {...field}
-                    value={field.value || ""}
+                    value={field.value}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      field.onChange(value === "" ? 0 : Number(value));
+                    }}
+                    onBlur={field.onBlur}
+                    name={field.name}
                   />
                 </FormControl>
               </FormItem>
@@ -258,7 +271,6 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
                     disabled={loading}
                     placeholder="eg:- React, Typescript..."
                     {...field}
-                    value={field.value || ""}
                   />
                 </FormControl>
               </FormItem>
@@ -270,6 +282,7 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
               size={"sm"}
               variant={"outline"}
               disabled={isSubmitting || loading}
+              onClick={() => form.reset()}
             >
               Reset
             </Button>
@@ -286,7 +299,7 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
             </Button>
           </div>
         </form>
-      </FormProvider>
+      </Form>
     </div>
   );
 };
